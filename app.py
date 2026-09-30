@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 from flask import Flask, jsonify, request, send_file
 
@@ -37,7 +38,7 @@ def generar_epub():
         return jsonify({"error": "Falta la URL válida en el cuerpo de la petición."}), 400
 
     try:
-        output_dir = "/tmp"
+        output_dir = tempfile.gettempdir()
         os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, f"lecturia-{os.urandom(4).hex()}.epub")
 

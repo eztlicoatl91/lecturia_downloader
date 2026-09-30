@@ -163,8 +163,13 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
 
     timestamp = datetime.now().strftime("%H%M%S")
     filename = output_file or f"{clean_filename(author)} - {clean_filename(title)}_{timestamp}.epub"
+    output_dir = os.path.dirname(filename)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     epub.write_epub(filename, book, {})
     print(f"✓ {filename} generado exitosamente.")
+    return filename
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "https://lecturia.org/cuentos-y-relatos/robert-bloch-la-progenie-de-bubastis/29062/"
