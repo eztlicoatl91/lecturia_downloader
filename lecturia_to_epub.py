@@ -3,13 +3,14 @@ import re
 import sys
 import uuid
 import io
+import textwrap
 from urllib.parse import urljoin
 from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
 from ebooklib import epub
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 HEADERS = {
     "User-Agent": (
@@ -29,7 +30,7 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
 
     soup = BeautifulSoup(resp.content, "html.parser")
 
-    # 1. Extracción de Metadatos Vía Open Graph
+    # 1. Metadatos
     meta_title = soup.find("meta", attrs={"property": "og:title"})
     meta_desc = soup.find("meta", attrs={"property": "og:description"})
     meta_img = soup.find("meta", attrs={"property": "og:image"})
@@ -56,7 +57,7 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
     book.add_metadata('DC', 'description', description)
     book.add_metadata('DC', 'publisher', 'Lecturia')
 
-    # 2. Procesamiento de Portada Oficial
+    # 2. Procesamiento de Portada y Recuadro de Título
     has_cover = False
     if cover_url:
         img_url = urljoin(url, cover_url)
@@ -67,12 +68,47 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
                 if img_data.mode != 'RGB':
                     img_data = img_data.convert('RGB')
                 
+                # --- INICIO MODIFICACIÓN: DIBUJAR RECUADRO Y TEXTO ---
+                width, height = img_data.size
+                draw = ImageDraw.Draw(img_data)
+                
+                # Calcular un tamaño de fuente proporcional al ancho de la imagen (aprox. 5%)
+                font_size = max(24, int(width * 0.05))
+                try:
+                    # Funciona en Pillow >= 10.1
+                    font = ImageFont.load_default(size=font_size)
+                except TypeError:
+                    font = ImageFont.load_default()
+
+                # Dividir el texto si es muy largo
+                avg_char_width = font_size * 0.6
+                chars_per_line = max(15, int((width - 40) / avg_char_width))
+                wrapped_text = textwrap.fill(title, width=chars_per_line)
+
+                # Calcular la caja delimitadora del texto
+                left, top, right, bottom = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
+                text_width = right - left
+                text_height = bottom - top
+
+                # Configurar el recuadro blanco en la parte inferior
+                padding = 20
+                rect_y0 = height - text_height - (padding * 2)
+                
+                # Dibujar fondo blanco
+                draw.rectangle([0, rect_y0, width, height], fill="white")
+                
+                # Centrar y dibujar el texto en negro
+                text_x = (width - text_width) // 2
+                text_y = rect_y0 + padding
+                draw.multiline_text((text_x, text_y), wrapped_text, fill="black", font=font, align="center")
+                # --- FIN MODIFICACIÓN ---
+
                 img_byte_arr = io.BytesIO()
                 img_data.save(img_byte_arr, format='JPEG', quality=90)
                 
                 book.set_cover("cover.jpg", img_byte_arr.getvalue(), create_page=True)
                 has_cover = True
-                print("-> Portada JPEG inyectada y registrada.")
+                print("-> Portada JPEG con recuadro de título inyectada.")
         except Exception as err:
             print(f"-> Aviso: No se pudo procesar la portada ({err})")
 
@@ -102,7 +138,6 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
     style_item = epub.EpubItem(uid="style_paperwhite", file_name="style/style.css", media_type="text/css", content=css_content)
     book.add_item(style_item)
 
-    # AQUÍ ESTÁ LA MAGIA: Pasamos el HTML puro, asegurando entidades correctas (formatter="html")
     html_body = f"""
     <div class="story-header">
         <div class="main-title">{title}</div>
@@ -126,16 +161,10 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
     else:
         book.spine = ['nav', chapter]
 
-    # Exportación final con sello de tiempo
     timestamp = datetime.now().strftime("%H%M%S")
     filename = output_file or f"{clean_filename(author)} - {clean_filename(title)}_{timestamp}.epub"
-    output_dir = os.path.dirname(filename)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
     epub.write_epub(filename, book, {})
     print(f"✓ {filename} generado exitosamente.")
-    return filename
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "https://lecturia.org/cuentos-y-relatos/robert-bloch-la-progenie-de-bubastis/29062/"
