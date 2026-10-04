@@ -121,6 +121,20 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
         trash.decompose()
     for img in content_area.find_all("img"):
         img.decompose()
+
+    # Eliminar sinopsis repetida y encabezados redundantes del cuerpo del relato
+    body_synopsis_text = None
+    for p in list(content_area.find_all(["p", "div"])):
+        text_clean = p.get_text(strip=True)
+        if re.match(r'^(sinopsis|resumen)\s*:', text_clean, re.IGNORECASE):
+            body_synopsis_text = re.sub(r'^(sinopsis|resumen)\s*:\s*', '', text_clean, flags=re.IGNORECASE).strip()
+            p.decompose()
+        elif re.search(r'\((cuento|relato|texto|obra)\s+completo[a]?\)', text_clean, re.IGNORECASE):
+            p.decompose()
+
+    if (not description or description == "Cuento generado desde Lecturia.") and body_synopsis_text:
+        description = body_synopsis_text
+
     for tag in content_area.find_all(True):
         if "style" in tag.attrs: del tag.attrs["style"]
         if "color" in tag.attrs: del tag.attrs["color"]
