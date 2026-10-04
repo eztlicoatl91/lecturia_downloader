@@ -23,7 +23,7 @@ HEADERS = {
 def clean_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "", name).strip()
 
-def build_epub_from_lecturia(url: str, output_file: str = None):
+def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str = None):
     print("--- INICIANDO EXTRACCIÓN ---")
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
@@ -125,50 +125,78 @@ def build_epub_from_lecturia(url: str, output_file: str = None):
         if "style" in tag.attrs: del tag.attrs["style"]
         if "color" in tag.attrs: del tag.attrs["color"]
 
-    # 4. Estilos y Ensamblaje del Capítulo
+    # 4. Estilos y Ensamblaje de Capítulos
     css_content = """
     @page { margin: 0; }
     body { margin: 0; padding: 0; }
-    .story-header { text-align: center; margin-top: 2em; margin-bottom: 2em; }
+    .story-header, .synopsis-header { text-align: center; margin-top: 2em; margin-bottom: 2em; }
     .main-title { font-size: 1.5em; font-weight: bold; margin-bottom: 0.3em; line-height: 1.2; }
-    .author-name { font-size: 1.1em; color: #333; }
+    .author-name { font-size: 1.1em; color: #444; }
+    .synopsis-label { font-size: 1.2em; font-weight: bold; text-align: center; margin-top: 1.5em; margin-bottom: 1em; text-transform: uppercase; letter-spacing: 0.05em; }
+    .synopsis-text { font-style: italic; text-align: justify; text-indent: 1.2em; line-height: 1.5; margin: 1em 0; }
+    .divider { border: 0; height: 1px; background: #ccc; margin: 2em auto; width: 40%; }
     p { text-align: justify; text-indent: 1.3em; margin: 0 0 0.3em 0; line-height: 1.45; }
     h1 + p, h2 + p, h3 + p { text-indent: 0; }
     """
     style_item = epub.EpubItem(uid="style_paperwhite", file_name="style/style.css", media_type="text/css", content=css_content)
     book.add_item(style_item)
 
-    html_body = f"""
+    # Página 1: Sinopsis independiente
+    synopsis_html = f"""
+    <div class="synopsis-header">
+        <div class="main-title">{title}</div>
+        <div class="author-name">{author}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="synopsis-label">Sinopsis</div>
+    <p class="synopsis-text">{description}</p>
+    """
+    synopsis_chapter = epub.EpubHtml(title="Sinopsis", file_name="synopsis.xhtml", lang="es")
+    synopsis_chapter.content = synopsis_html
+    synopsis_chapter.add_item(style_item)
+    book.add_item(synopsis_chapter)
+
+    # Página 2: Relato completo
+    story_html = f"""
     <div class="story-header">
         <div class="main-title">{title}</div>
         <div class="author-name">{author}</div>
     </div>
     {content_area.decode_contents(formatter="html")}
     """
-    
     chapter = epub.EpubHtml(title=title, file_name="story.xhtml", lang="es")
-    chapter.content = html_body
+    chapter.content = story_html
     chapter.add_item(style_item)
     book.add_item(chapter)
 
     # 5. Orden de Lectura Estricto (Spine)
-    book.toc = (epub.Link("story.xhtml", title, "intro"),)
+    book.toc = (
+        epub.Link("synopsis.xhtml", "Sinopsis", "synopsis"),
+        epub.Link("story.xhtml", title, "story"),
+    )
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
     
     if has_cover:
-        book.spine = ['cover', 'nav', chapter]
+        book.spine = ['cover', 'nav', synopsis_chapter, chapter]
     else:
-        book.spine = ['nav', chapter]
+        book.spine = ['nav', synopsis_chapter, chapter]
 
     timestamp = datetime.now().strftime("%H%M%S")
-    filename = output_file or f"{clean_filename(author)} - {clean_filename(title)}_{timestamp}.epub"
-    output_dir = os.path.dirname(filename)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    default_name = f"{clean_filename(author)} - {clean_filename(title)}_{timestamp}.epub"
+    if output_file:
+        filename = output_file
+    elif output_dir:
+        filename = os.path.join(output_dir, default_name)
+    else:
+        filename = default_name
+
+    target_dir = os.path.dirname(filename)
+    if target_dir:
+        os.makedirs(target_dir, exist_ok=True)
 
     epub.write_epub(filename, book, {})
-    print(f"✓ {filename} generado exitosamente.")
+    print(f"[OK] {filename} generado exitosamente.")
     return filename
 
 if __name__ == "__main__":

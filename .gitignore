@@ -1,28 +1,38 @@
 # Entornos virtuales de Python
 .venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Archivos compilados y caché de Python
+# Archivos compilados y cache de Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 
 # Archivos de entorno y credenciales (Seguridad)
 .env
 .env.*
 
-# Archivos generados localmente por la aplicación durante las pruebas
+# Archivos generados localmente por la aplicación (EPUBs y temporales)
 *.epub
-cuento_descargado.epub
-prueba_local.epub
+*.mobi
+*.azw3
 /tmp/
+*.log
 
-# Directorios de distribución y empaquetado
+# Directorios de distribucion y empaquetado (PyInstaller)
 build/
 dist/
+*.spec
 *.egg-info/
+.eggs/
 
-# Archivos de sistema operativo y configuraciones de editores de código
+# Configuraciones de editores de codigo y SO
 .DS_Store
+Thumbs.db
 .vscode/
+.idea/
