@@ -117,7 +117,7 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
     if not content_area:
         raise ValueError("No se pudo localizar el texto principal.")
 
-    for trash in content_area.select(".code-block, .kb-row-layout-wrap, .lecturia-share-bar, .wpml-flags-switcher, script, style, iframe, form, button, noscript"):
+    for trash in content_area.select(".code-block, .kb-row-layout-wrap, .lecturia-share-bar, .wpml-flags-switcher, .toc, .table-of-contents, #toc_container, .ez-toc-container, .lwptoc, script, style, iframe, form, button, noscript"):
         trash.decompose()
     for img in content_area.find_all("img"):
         img.decompose()
@@ -192,9 +192,9 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
     book.add_item(epub.EpubNav())
     
     if has_cover:
-        book.spine = ['cover', 'nav', synopsis_chapter, chapter]
+        book.spine = ['cover', synopsis_chapter, chapter]
     else:
-        book.spine = ['nav', synopsis_chapter, chapter]
+        book.spine = [synopsis_chapter, chapter]
 
     timestamp = datetime.now().strftime("%H%M%S")
     default_name = f"{clean_filename(author)} - {clean_filename(title)}_{timestamp}.epub"
