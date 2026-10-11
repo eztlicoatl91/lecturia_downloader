@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -160,7 +161,7 @@ HTML_TEMPLATE = """
             background: var(--input-bg);
             border: 1px solid var(--card-border);
             border-radius: 12px;
-            padding: 14px 16px 14px 46px;
+            padding: 14px 48px 14px 46px;
             color: var(--text-primary);
             font-size: 0.95rem;
             transition: all 0.2s ease;
@@ -175,6 +176,29 @@ HTML_TEMPLATE = """
 
         .input-url::placeholder {
             color: var(--text-muted);
+        }
+
+        .btn-clear {
+            position: absolute;
+            right: 12px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 0;
+        }
+
+        .btn-clear:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.1);
         }
 
         .btn-submit {
@@ -334,6 +358,12 @@ HTML_TEMPLATE = """
                         required 
                         autocomplete="off"
                     />
+                    <button type="button" id="clearUrlBtn" class="btn-clear" title="Limpiar URL" aria-label="Limpiar URL">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -363,6 +393,7 @@ HTML_TEMPLATE = """
     <script>
         const form = document.getElementById('downloadForm');
         const urlInput = document.getElementById('storyUrl');
+        const clearUrlBtn = document.getElementById('clearUrlBtn');
         const submitBtn = document.getElementById('submitBtn');
         const statusContainer = document.getElementById('statusContainer');
         const statusSpinner = document.getElementById('statusSpinner');
@@ -372,6 +403,11 @@ HTML_TEMPLATE = """
             urlInput.value = url;
             urlInput.focus();
         }
+
+        clearUrlBtn.addEventListener('click', () => {
+            urlInput.value = '';
+            urlInput.focus();
+        });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -459,7 +495,12 @@ def descargar():
         if not generated_file or not os.path.exists(generated_file):
             return jsonify({"error": "No se pudo generar el archivo EPUB."}), 500
 
-        download_name = os.path.basename(generated_file)
+        download_name = re.sub(
+            r"_\d+(?=\.epub$)",
+            "",
+            os.path.basename(generated_file),
+            flags=re.IGNORECASE,
+        )
         # Si el nombre temporal tiene prefijo genérico, podemos intentar ponerle el nombre limpio del archivo
         return send_file(
             generated_file,
