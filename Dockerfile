@@ -4,6 +4,9 @@ FROM python:3.11-slim
 # Establecemos el directorio de trabajo
 WORKDIR /app
 
+# Instalar fuentes para compatibilidad UTF-8 completa en portadas (tildes, eñes)
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+
 # Copiamos dependencias e instalamos
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

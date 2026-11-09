@@ -1,3 +1,4 @@
+import html
 import os
 import re
 import sys
@@ -23,6 +24,34 @@ HEADERS = {
 def clean_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "", name).strip()
 
+def get_cover_font(size: int):
+    """
+    Obtiene una fuente TrueType con soporte completo para caracteres en español
+    (tildes, eñes, diéresis, etc.) para evitar el caracter de reemplazo (tofu)
+    que genera la fuente básica por defecto de Pillow.
+    """
+    candidate_fonts = [
+        "arial.ttf",
+        "segoeui.ttf",
+        "calibri.ttf",
+        "tahoma.ttf",
+        "DejaVuSans.ttf",
+        "LiberationSans-Regular.ttf",
+        "FreeSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for font_name in candidate_fonts:
+        try:
+            return ImageFont.truetype(font_name, size=size)
+        except (IOError, OSError):
+            continue
+
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
 def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str = None):
     print("--- INICIANDO EXTRACCIÓN ---")
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -44,7 +73,12 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
         author = "Autor Desconocido"
         title = cleaned_header
 
+    # Decodificar entidades HTML si vienen codificadas (&iacute;, &aacute;, etc.)
+    author = html.unescape(author)
+    title = html.unescape(title)
+
     description = meta_desc["content"] if meta_desc and meta_desc.get("content") else "Cuento generado desde Lecturia."
+    description = html.unescape(description)
     cover_url = meta_img["content"] if meta_img and meta_img.get("content") else None
 
     print(f"-> Detectado: {title} por {author}")
@@ -68,26 +102,21 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
                 if img_data.mode != 'RGB':
                     img_data = img_data.convert('RGB')
                 
-                # --- INICIO MODIFICACIÓN: DIBUJAR RECUADRO Y TEXTO ---
+                # --- INICIO DIBUJO DE RECUADRO Y TÍTULO ---
                 width, height = img_data.size
                 draw = ImageDraw.Draw(img_data)
                 
-                # Calcular un tamaño de fuente proporcional al ancho de la imagen (aprox. 5%)
+                # Fuente proporcional al ancho de la imagen (aprox. 5%) con soporte Unicode
                 font_size = max(24, int(width * 0.05))
-                try:
-                    # Funciona en Pillow >= 10.1
-                    font = ImageFont.load_default(size=font_size)
-                except TypeError:
-                    font = ImageFont.load_default()
+                font = get_cover_font(font_size)
 
-                # Dividir el texto si es muy largo
-                avg_char_width = font_size * 0.6
+                # Dividir el texto respetando los límites de la portada
+                avg_char_width = font_size * 0.55
                 chars_per_line = max(15, int((width - 40) / avg_char_width))
                 wrapped_text = textwrap.fill(title, width=chars_per_line)
 
-                # Calcular la caja delimitadora del texto
-                left, top, right, bottom = draw.multiline_textbbox((0, 0), wrapped_text, font=font)
-                text_width = right - left
+                # Calcular la altura del texto
+                left, top, right, bottom = draw.multiline_textbbox((0, 0), wrapped_text, font=font, align="center")
                 text_height = bottom - top
 
                 # Configurar el recuadro blanco en la parte inferior
@@ -97,11 +126,11 @@ def build_epub_from_lecturia(url: str, output_file: str = None, output_dir: str 
                 # Dibujar fondo blanco
                 draw.rectangle([0, rect_y0, width, height], fill="white")
                 
-                # Centrar y dibujar el texto en negro
-                text_x = (width - text_width) // 2
-                text_y = rect_y0 + padding
-                draw.multiline_text((text_x, text_y), wrapped_text, fill="black", font=font, align="center")
-                # --- FIN MODIFICACIÓN ---
+                # Centrar y dibujar el texto en negro usando anclaje centrado
+                center_x = width // 2
+                start_y = rect_y0 + padding
+                draw.multiline_text((center_x, start_y), wrapped_text, fill="black", font=font, align="center", anchor="ma")
+                # --- FIN DIBUJO DE RECUADRO Y TÍTULO ---
 
                 img_byte_arr = io.BytesIO()
                 img_data.save(img_byte_arr, format='JPEG', quality=90)
